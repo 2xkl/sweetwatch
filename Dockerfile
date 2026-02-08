@@ -2,10 +2,15 @@ FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir .
+# Upgrade pip and setuptools
+RUN pip install --upgrade pip setuptools wheel
 
+# Copy project files
+COPY pyproject.toml ./
 COPY src/ ./src/
+
+# Install dependencies
+RUN pip install --no-cache-dir .
 
 EXPOSE 8000
 

@@ -2,6 +2,13 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # CGM Source
+    cgm_source: str = "nightscout"  # "nightscout" or "librelinkup"
+
+    # Nightscout
+    nightscout_url: str = ""
+    nightscout_api_secret: str = ""
+
     # LibreLinkUp
     libre_username: str = ""
     libre_password: str = ""

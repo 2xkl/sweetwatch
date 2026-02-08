@@ -29,6 +29,7 @@ env/
 
 # Docker
 docker-compose.override.yml
+data/
 
 # Terraform
 infra/terraform/.terraform/
