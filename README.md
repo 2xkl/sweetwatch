@@ -1,6 +1,6 @@
 # SweetWatch
 
-Open source CGM monitoring with AI agent and Garmin integration.
+Open source CGM monitoring with AI agent and Garmin integration
 
 ## Features
 
