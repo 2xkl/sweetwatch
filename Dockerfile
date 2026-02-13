@@ -8,6 +8,7 @@ RUN pip install --upgrade pip setuptools wheel
 # Copy project files
 COPY pyproject.toml ./
 COPY src/ ./src/
+COPY tests/ ./tests/
 
 # Install dependencies
 RUN pip install --no-cache-dir .

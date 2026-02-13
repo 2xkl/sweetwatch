@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SweetWatch</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2rem;
+            color: #4ade80;
+        }
+        .current-reading {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
+        .glucose-value {
+            font-size: 6rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .glucose-value.in-range { color: #4ade80; }
+        .glucose-value.high { color: #fbbf24; }
+        .glucose-value.very-high { color: #ef4444; }
+        .glucose-value.low { color: #ef4444; }
+        .trend-arrow {
+            font-size: 4rem;
+            margin-left: 10px;
+        }
+        .unit {
+            font-size: 1.5rem;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+        .timestamp {
+            font-size: 1rem;
+            color: #64748b;
+            margin-top: 20px;
+        }
+        .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .sync-btn {
+            background: #4ade80;
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 15px;
+        }
+        .sync-btn:hover {
+            background: #22c55e;
+        }
+        .sync-btn:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+        }
+        .range-lines {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SweetWatch</h1>
+
+        <div class="current-reading">
+            <div id="current-display">
+                <span class="glucose-value" id="glucose-value">---</span>
+                <span class="trend-arrow" id="trend-arrow"></span>
+                <div class="unit">mg/dL</div>
+                <div class="timestamp" id="timestamp">Ladowanie...</div>
+                <button class="sync-btn" id="sync-btn" onclick="syncData()">Synchronizuj</button>
+            </div>
+            <div id="error-display" class="error" style="display: none;"></div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="glucose-chart"></canvas>
+        </div>
+
+        <div class="status">
+            Auto-refresh co 5 minut | Ostatnia aktualizacja: <span id="last-update">-</span>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        function getGlucoseClass(value) {
+            if (value < 70) return 'low';
+            if (value <= 180) return 'in-range';
+            if (value <= 250) return 'high';
+            return 'very-high';
+        }
+
+        function formatTime(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function formatTimestamp(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+
+            if (diffMins < 1) return 'Teraz';
+            if (diffMins === 1) return '1 minuta temu';
+            if (diffMins < 5) return `${diffMins} minuty temu`;
+            if (diffMins < 60) return `${diffMins} minut temu`;
+            return date.toLocaleString('pl-PL');
+        }
+
+        async function fetchCurrent() {
+            try {
+                const response = await fetch('/api/glucose/current');
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Brak danych. Kliknij "Synchronizuj" aby pobrac dane.');
+                    }
+                    throw new Error('Blad pobierania danych');
+                }
+
+                const data = await response.json();
+
+                document.getElementById('glucose-value').textContent = Math.round(data.value);
+                document.getElementById('glucose-value').className = 'glucose-value ' + getGlucoseClass(data.value);
+                document.getElementById('trend-arrow').textContent = data.trend_arrow;
+                document.getElementById('timestamp').textContent = formatTimestamp(data.timestamp);
+                document.getElementById('error-display').style.display = 'none';
+                document.getElementById('current-display').style.display = 'block';
+            } catch (error) {
+                document.getElementById('glucose-value').textContent = '---';
+                document.getElementById('trend-arrow').textContent = '';
+                document.getElementById('error-display').textContent = error.message;
+                document.getElementById('error-display').style.display = 'block';
+            }
+        }
+
+        async function fetchHistory() {
+            try {
+                const response = await fetch('/api/glucose/history?hours=24&limit=288');
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (data.count === 0) return;
+
+                const readings = data.readings.reverse();
+                const labels = readings.map(r => formatTime(r.timestamp));
+                const values = readings.map(r => r.value);
+
+                if (chart) {
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = values;
+                    chart.update();
+                } else {
+                    const ctx = document.getElementById('glucose-chart').getContext('2d');
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Glukoza (mg/dL)',
+                                data: values,
+                                borderColor: '#4ade80',
+                                backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 0,
+                                borderWidth: 2,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { display: false },
+                                annotation: {
+                                    annotations: {
+                                        lowLine: {
+                                            type: 'line',
+                                            yMin: 70,
+                                            yMax: 70,
+                                            borderColor: 'rgba(239, 68, 68, 0.5)',
+                                            borderWidth: 1,
+                                            borderDash: [5, 5],
+                                        },
+                                        highLine: {
+                                            type: 'line',
+                                            yMin: 180,
+                                            yMax: 180,
+                                            borderColor: 'rgba(251, 191, 36, 0.5)',
+                                            borderWidth: 1,
+                                            borderDash: [5, 5],
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    display: true,
+                                    ticks: { color: '#64748b', maxTicksLimit: 12 },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                },
+                                y: {
+                                    display: true,
+                                    min: 40,
+                                    max: 300,
+                                    ticks: { color: '#64748b' },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Blad pobierania historii:', error);
+            }
+        }
+
+        async function syncData() {
+            const btn = document.getElementById('sync-btn');
+            btn.disabled = true;
+            btn.textContent = 'Synchronizowanie...';
+
+            try {
+                const response = await fetch('/api/glucose/sync', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok) {
+                    btn.textContent = `Zsynchronizowano ${data.synced} odczytow`;
+                    await refresh();
+                } else {
+                    btn.textContent = 'Blad synchronizacji';
+                }
+            } catch (error) {
+                btn.textContent = 'Blad polaczenia';
+            }
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Synchronizuj';
+            }, 3000);
+        }
+
+        async function refresh() {
+            await Promise.all([fetchCurrent(), fetchHistory()]);
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString('pl-PL');
+        }
+
+        // Initial load
+        refresh();
+
+        // Auto-refresh every 5 minutes (300000ms)
+        setInterval(refresh, 300000);
+    </script>
+</body>
+</html>
