@@ -44,7 +44,7 @@ class SweetWatchView extends WatchUi.View {
 
     function fetchGlucose() as Void {
         Communications.makeWebRequest(
-            "http://YOUR_SERVER:8000/api/v1/glucose/current",
+            "https://test.sweetwatch.app/api/glucose/current",
             null,
             {:method => Communications.HTTP_REQUEST_METHOD_GET,
              :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON},
@@ -54,10 +54,17 @@ class SweetWatchView extends WatchUi.View {
 
     function onReceive(responseCode as Number, data as Dictionary or Null) as Void {
         if (responseCode == 200 && data != null) {
-            _glucoseValue = data["value"].toString();
-            _trend = data["trend_arrow"] as String;
+            var value = data["value"];
+            if (value != null) {
+                _glucoseValue = value.toNumber().toString();
+            }
+            var trend = data["trend_arrow"];
+            if (trend != null) {
+                _trend = trend as String;
+            }
         } else {
             _glucoseValue = "ERR";
+            _trend = responseCode.toString();
         }
         WatchUi.requestUpdate();
     }
