@@ -154,6 +154,31 @@ class LibreLinkUpSource(CGMSource):
         entries = await self.get_entries(count=1)
         return entries[0] if entries else None
 
+    def _parse_timestamp(self, ts_str: str) -> datetime:
+        """Parse timestamp from various LibreLinkUp formats."""
+        if not ts_str:
+            return datetime.now(timezone.utc)
+
+        # Try ISO format first
+        try:
+            return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+
+        # Try LibreLinkUp format: "M/D/YYYY h:mm:ss PM"
+        for fmt in [
+            "%m/%d/%Y %I:%M:%S %p",
+            "%d/%m/%Y %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+        ]:
+            try:
+                return datetime.strptime(ts_str, fmt).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+
+        logger.warning(f"Could not parse timestamp: {ts_str}")
+        return datetime.now(timezone.utc)
+
     async def get_entries(self, count: int = 10) -> list[GlucoseEntry]:
         """Get recent glucose readings from LibreLinkUp."""
         await self._ensure_authenticated()
@@ -177,10 +202,7 @@ class LibreLinkUpSource(CGMSource):
             trend = TREND_MAP.get(trend_value, Trend.UNKNOWN)
 
             ts_str = item.get("Timestamp", item.get("FactoryTimestamp", item.get("timestamp", "")))
-            try:
-                timestamp = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                timestamp = datetime.now(timezone.utc)
+            timestamp = self._parse_timestamp(ts_str)
 
             value = item.get("ValueInMgPerDl", item.get("Value", item.get("value", 0)))
 

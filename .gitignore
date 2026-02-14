@@ -39,6 +39,7 @@ infra/terraform/.terraform.lock.hcl
 
 # Garmin
 garmin/sweetwatch-widget/bin/
+garmin/sweetwatch-widget/*.prg
 
 # OS
 .DS_Store
